@@ -3,6 +3,12 @@
 #include <fstream>
 #include <vector>
 
+std::string IntermediateCode = R"(
+#include <iostream>
+#include <string>
+#include <fstream>
+#include <vector>
+
 class Buffer {
 public:
     Buffer() : index_(0) {
@@ -35,15 +41,22 @@ private:
     std::size_t index_;
 };
 
+int main() {
+    Buffer buf;
+)";
+
+
 int main(int argc, char *argv[]) {
     if (argc != 2) {
         std::cerr << "Too few arguments" << std::endl;
         return -1;
     }
 
-    std::ifstream source(argv[1]);
+    const std::string source_file = argv[1];
+    const std::string intermediate_file = source_file + ".cpp";
+    std::ifstream source(source_file);
     if (!source) {
-        std::cerr << "Cannot read " << argv[1] << std::endl;
+        std::cerr << "Cannot read " << source_file << std::endl;
         return -1;
     }
 
@@ -57,71 +70,46 @@ int main(int argc, char *argv[]) {
             }
         }
         if (!source.eof()) {
-            std::cerr << "File read error: " << argv[1] << std::endl;
+            std::cerr << "File read error: " << source_file << std::endl;
         }
     }
 
-    Buffer buf;
     for (int i = 0; i < source_code.size(); ++i) {
         char c = source_code[i];
         switch (c) {
         case '.':
-            std::cout << buf.getValue();
+            IntermediateCode += "\tstd::cout << buf.getValue();\n";
             break;
         case '+':
-            buf.increment();
+            IntermediateCode += "\tbuf.increment();\n";
             break;
         case '-':
-            buf.decrement();
+            IntermediateCode += "\tbuf.decrement();\n";
             break;
         case '<':
-            buf.prevPtr();
+            IntermediateCode += "\tbuf.prevPtr();\n";
             break;
         case '>':
-            buf.nextPtr();
+            IntermediateCode += "\tbuf.nextPtr();\n";
             break;
         case '[':
-            if (static_cast<int>(buf.getValue()) == 0) {
-                int count = 1;
-                for (int j = i + 1; j < source_code.size(); ++j) {
-                    if (source_code[j] == ']') {
-                        if (--count == 0) {
-                            i = j;
-                            break;
-                        }
-                    } else if (source_code[j] == '[') {
-                        count++;
-                    }
-                }
-                if (count) {
-                    std::cerr << "No matches for '['" << std::endl;
-                    return -1;
-                }
-            }
+            IntermediateCode += R"(
+            while (static_cast<int>(buf.getValue())) {
+            )";
             break;
         case ']':
-            if (static_cast<int>(buf.getValue()) != 0) {
-                int count = 1;
-                for (int j = i - 1; j >= 0; --j) {
-                    if (source_code[j] == '[') {
-                        if (--count == 0) {
-                            i = j;
-                            break;
-                        }
-                    } else if (source_code[j] == ']') {
-                        count++;
-                    }
-                }
-                if (count) {
-                    std::cerr << "No matches for ']'" << std::endl;
-                    return -1;
-                }
+            IntermediateCode += R"(
             }
+            )";
             break;
         case ',':
-            char input;
-            std::cin >> std::setw(1) >> input;
-            buf.serValue(input);
+            IntermediateCode += R"(
+            {
+                char input;
+                std::cin >> std::setw(1) >> input;
+                buf.serValue(input);
+            }
+            )";
             break;
         default:
             std::cerr << "Cannot reach here" << std::endl;
@@ -129,5 +117,12 @@ int main(int argc, char *argv[]) {
             // Cannot reach here
         }
     }
-    std::cout << std::endl;
+    IntermediateCode += "std::cout << std::endl;\n}";
+
+    std::ofstream ofs(intermediate_file);
+    if (!ofs) {
+        std::cerr << "Open intermediate-file failed" << std::endl;
+        return -1;
+    }
+    ofs << IntermediateCode << std::endl;;
 }
